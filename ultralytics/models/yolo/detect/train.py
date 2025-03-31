@@ -332,17 +332,22 @@ class AldiTrainer(DetectionTrainer):
                     batch = self.preprocess_batch(batch)
                     source_batch, target_batch = self.split_batch(batch)
 
-                    # Calculate hard pseudo-labels
-                    ema_output = self.ema.ema(target_batch['img'])
-                    ema_output = ops.non_max_suppression(ema_output)
-                    # Define the hard targets of the target domain to be the output of the EMA model
-                    target_batch['bboxes'] = torch.cat([output[:, :4] for output in ema_output], dim=0)
-                    target_batch['cls'] = torch.cat([output[:, 5] for output in ema_output], dim=0).unsqueeze(-1)
-                    Ns = torch.tensor([t.shape[0] for t in ema_output])  # List of N values
-                    target_batch['batch_idx'] = torch.repeat_interleave(torch.arange(len(ema_output)), Ns).to(target_batch['bboxes'].device)
+                    if target_batch and source_batch:
+                        # Calculate hard pseudo-labels
+                        ema_output = self.ema.ema(target_batch['img'])
+                        ema_output = ops.non_max_suppression(ema_output)
+                        # Define the hard targets of the target domain to be the output of the EMA model
+                        target_batch['bboxes'] = torch.cat([output[:, :4] for output in ema_output], dim=0)
+                        target_batch['cls'] = torch.cat([output[:, 5] for output in ema_output], dim=0).unsqueeze(-1)
+                        Ns = torch.tensor([t.shape[0] for t in ema_output])  # List of N values
+                        target_batch['batch_idx'] = torch.repeat_interleave(torch.arange(len(ema_output)), Ns).to(target_batch['bboxes'].device)
 
-                    # Merge into one branch
-                    batch = self.merge_batch(source_batch, target_batch)
+                        # Merge into one branch
+                        batch = self.merge_batch(source_batch, target_batch)
+                    elif target_batch:
+                        batch = target_batch
+                    elif source_batch:
+                        batch = source_batch
                                        
                     self.loss, self.loss_items = self.model(batch)
 
